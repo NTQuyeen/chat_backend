@@ -1,0 +1,6 @@
+node_modules/
+*.log
+
+# Firebase Service Account (KHÔNG push)
+firebase-adminsdk*.json
+flutter-chat-app-15cae-firebase-adminsdk*.json
