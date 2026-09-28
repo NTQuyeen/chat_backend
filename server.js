@@ -4,11 +4,15 @@ const cors = require("cors");
 const { initializeApp, cert } = require("firebase-admin/app");
 const { getMessaging } = require("firebase-admin/messaging");
 
+const { getFirestore } = require("firebase-admin/firestore");
+
 const serviceAccount = require("./flutter-chat-app-15cae-firebase-adminsdk-fbsvc-c485788b9e.json");
 
 initializeApp({
   credential: cert(serviceAccount),
+  
 });
+const db = getFirestore();
 
 const app = express();
 
@@ -17,25 +21,54 @@ app.use(express.json());
 
 app.post("/send-notification", async (req, res) => {
   try {
-    const { token, title, body } = req.body;
+    const { senderId, title, body } = req.body;
 
-    await getMessaging().send({
-      token,
-      notification: {
-        title,
-        body,
-      },
-      android: {
-        priority: "high",
-      },
-      data: {
-        click_action: "FLUTTER_NOTIFICATION_CLICK",
-      },
+    if (!senderId || !title || !body) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing senderId/title/body",
+      });
+    }
+
+    const usersSnapshot = await db.collection("users").get();
+
+    let sent = 0;
+
+    for (const doc of usersSnapshot.docs) {
+      if (doc.id === senderId) continue;
+
+      const token = doc.data().fcmToken;
+
+      if (!token) continue;
+
+      try {
+        await getMessaging().send({
+          token,
+          notification: {
+            title,
+            body,
+          },
+          android: {
+            priority: "high",
+          },
+          data: {
+            click_action: "FLUTTER_NOTIFICATION_CLICK",
+          },
+        });
+
+        sent++;
+      } catch (err) {
+        console.error(`Lỗi gửi tới ${doc.id}:`, err.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      sent,
     });
-
-    res.json({ success: true });
   } catch (err) {
     console.error(err);
+
     res.status(500).json({
       success: false,
       error: err.message,
@@ -43,6 +76,8 @@ app.post("/send-notification", async (req, res) => {
   }
 });
 
-app.listen(3000, () => {
-  console.log("Server chạy tại http://localhost:3000");
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Server chạy tại http://localhost:${PORT}`);
 });
